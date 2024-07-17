@@ -1,6 +1,7 @@
 import pywt
 import numpy as np
 
+#Taken from https://github.com/oliviaguest/gini/blob/master/gini.py
 def gini(array):
     """Calculate the Gini coefficient of a numpy array."""
     # All values are treated equally, arrays must be 1d:
@@ -23,47 +24,31 @@ def gini(array):
 def create_sampling_mask(shape, sampling_rate):
     return np.random.rand(*shape) < sampling_rate
 
-# Forward wavelet transform function
-def wave(X,wavelet):
-    return pywt.dwtn(X, wavelet)
-
-# Inverse wavelet transform function
-def wave_inv(X_wavelet,wavelet):
-    return pywt.idwtn(X_wavelet, wavelet)
-
 #Optimization
 def shrinkage(x, alpha):
     return np.sign(x) * np.maximum(np.abs(x) - alpha, 0)
 
-class compressed_sensing:
-    def __init__(self,data,wavelet = "bior1.3",undersample_rate = .5,tau = 0.1 ,lambda_ = 0.01,max_iter = 100):
-        self.data = data
-        self.wavelet = wavelet
-        self.tau = tau
-        self.lambda_ = lambda_
-        self.max_iter = max_iter
-        
-        shape = self.data.shape
-        self.mask = create_sampling_mask(shape, undersample_rate)
-        
-        undersampled_data = self.data * self.mask
-        self.Y = pywt.dwtn(undersampled_data, self.wavelet)
-        
-    #Iterative shrinking optimization
-    def runCS(self):
-        
-        # Initialize wavelet coefficients with the same structure as Y
-        X_wavelet = {key: np.zeros_like(val) for key, val in self.Y.items()}
+#Iterative shrinking optimization
+def runCS(data,wavelet = "bior1.3",undersample_rate = .5,tau = 0.1 ,lambda_ = 0.01,max_iter = 100):
 
-        for k in range(self.max_iter):
-            # Gradient step
-            A_X_wavelet = pywt.idwtn(X_wavelet,self.wavelet) * self.mask  # Implicit sampling operation
-            gradient = pywt.dwtn((A_X_wavelet - pywt.idwtn(self.Y,self.wavelet)) * self.mask,self.wavelet)  # Masked gradient
+    shape = data.shape
+    mask = create_sampling_mask(shape, undersample_rate)
 
-            X_wavelet = {key: X_wavelet[key] - self.tau * gradient[key] for key in X_wavelet}
+    undersampled_data = data * mask
+    Y = pywt.dwtn(undersampled_data, wavelet)
 
-            # Shrinkage step
-            X_wavelet = {key: shrinkage(X_wavelet[key], self.lambda_ * self.tau) for key in X_wavelet}
+    # Initialize wavelet coefficients with the same structure as Y
+    X_wavelet = {key: np.zeros_like(val) for key, val in Y.items()}
 
-        X_reconstructed = pywt.idwtn(X_wavelet,self.wavelet)
-        return X_reconstructed, X_wavelet
+    for k in range(max_iter):
+        # Gradient step
+        A_X_wavelet = pywt.idwtn(X_wavelet,wavelet) * mask  # Implicit sampling operation
+        gradient = pywt.dwtn((A_X_wavelet - pywt.idwtn(Y,wavelet)) * mask, wavelet)  # Masked gradient
+
+        X_wavelet = {key: X_wavelet[key] - tau * gradient[key] for key in X_wavelet}
+
+        # Shrinkage step
+        X_wavelet = {key: shrinkage(X_wavelet[key], lambda_ * tau) for key in X_wavelet}
+
+    X_reconstructed = pywt.idwtn(X_wavelet,wavelet)
+    return X_reconstructed, X_wavelet
