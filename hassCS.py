@@ -1,5 +1,7 @@
 import pywt
 import numpy as np
+from sklearn import linear_model
+import sewar
 
 #Taken from https://github.com/oliviaguest/gini/blob/master/gini.py
 def gini(array):
@@ -52,7 +54,9 @@ def inverse_flat_wavelet_transform2(X, coeffs_structure, method='bior1.3'):
 
 #Iterative shrinking optimization
 def single_rec(data,wavelet = "bior1.3",undersample_rate = .5,tau = 0.995 ,lambda_ = 0.01,max_iter = 50):
-    
+    '''
+    Take this out
+    '''
     #This step creates the phi sensing basis
     shape = data.shape
     mask = create_sampling_mask(shape, undersample_rate)
@@ -60,7 +64,9 @@ def single_rec(data,wavelet = "bior1.3",undersample_rate = .5,tau = 0.995 ,lambd
     #This step creates our y, aka our measured data in the sparse wavelet domain
     undersampled_data = data * mask
     Y = pywt.dwtn(undersampled_data, wavelet)
-
+    '''
+    Till here
+    '''
     # Initialize wavelet coefficients with the same structure as Y, pywavelets uses dictionaries
     X_wavelet = {key: np.zeros_like(val) for key, val in Y.items()}
     #Optimization 
@@ -122,4 +128,63 @@ def multi_rec(y, method='sym3', lam=100, lam_decay=0.995, max_iter=80):
         lam *= lam_decay
     
     return xhat
+
+
+def compr(data, dimension, wavelet="bior1.3", threshold=20):
+    
+    sparsity_spectral = []
+    img_corr_spectral = []
+    
+    if dimension == 2:
+        data = data.sum(2)
+    elif dimension == 3:
+    else:
+        return "Invalid dimension"
+    # Apply n-dimensional discrete wavelet transform (dwtn)
+    coeffs = pywt.dwtn(data, wavelet)
+    
+    # Thresholding values to keep only low values
+    coeffs_thresholded = {}
+    for key, value in coeffs.items():
+        if key == 'aa':  # Approximation coefficients
+            coeffs_thresholded[key] = pywt.threshold(value, threshold, mode='soft')
+            
+        else:  # Detail coefficients (horizontal, vertical, diagonal)
+            coeffs_thresholded[key] = value
+    
+    # Compress the image using inverse n-dimensional discrete wavelet transform (idwtn)
+    X_reconstructed = pywt.idwtn(coeffs_thresholded, wavelet)
+    sparsity_spectral.append(gini(data))
+    img_corr_spectral.append(sewar.scc(data,X_reconstructed))
+    
+    return sparsity_spectral, img_corr_spectral, X_reconstructed, coeffs_thresholded
+
+
+def cs(data, dimension, wavelet = "bior1.3", tau = 0.995, lambda_ = 0.01, max_iter = 50):
+    sparsity_spectral = []
+    img_corr_spectral = []
+    Y = pywt.dwtn(data, wavelet)
+    if dimension == 2:
+        data = data.sum(2)
+    elif dimension == 3:
+    else:
+        "Invalid dimension"
+    # Initialize wavelet coefficients with the same structure as Y, pywavelets uses dictionaries
+    X_wavelet = {key: np.zeros_like(val) for key, val in Y.items()}
+    #Optimization 
+    for k in range(max_iter):
+        # Gradient step
+        A_X_wavelet = pywt.idwtn(X_wavelet,wavelet)  # Implicit sampling operation
+        gradient = pywt.dwtn((A_X_wavelet - pywt.idwtn(Y,wavelet)), wavelet)  # Masked gradient
+        
+        X_wavelet = {key: X_wavelet[key] - tau * gradient[key] for key in X_wavelet}
+
+        # Shrinkage step: Apply soft-thresholding to enforce sparsity (L1 regularization)
+        X_wavelet = {key: shrinkage(X_wavelet[key], lambda_ * tau) for key in X_wavelet}
+
+        
+    X_reconstructed = pywt.idwtn(X_wavelet,wavelet)
+
+    return X_reconstructed, X_wavelet
+
 
