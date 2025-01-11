@@ -3,9 +3,12 @@ Harmonic Analysis for Sparse Signals
 
 # Initial setup
 
-Using Python v 3.11
-Using venv to handle libraries and install into local /venv01
-Requirements
+UW/BOCK102
+    Using venv : venv01 py3.11
+UW/Dragon
+    Using venv : hass py3.10
+
+## Requirements
  pip install PyWavelets opencv-python h5py matplotlib tqdm scikit-image sewar
 Data
  data folder mapped to : data/data_filepath.txt
